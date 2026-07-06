@@ -1,0 +1,122 @@
+
+# =============================================================================
+# CI Pipeline — runs on every push and pull request
+# =============================================================================
+# Jobs:
+#   1. lint    → ruff check + ruff format
+#   2. type    → mypy strict type checking
+#   3. test    → pytest unit + integration tests
+#
+# All three must pass before a PR can be merged.
+# =============================================================================
+
+name: CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true  # cancel older runs when new commits pushed
+
+env:
+  PYTHON_VERSION: "3.12"
+  UV_VERSION: "0.4.0"
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Lint + Format
+  # ---------------------------------------------------------------------------
+  lint:
+    name: Lint & Format
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run ruff format check
+        run: uv run ruff format --check src tests scripts
+
+      - name: Run ruff lint
+        run: uv run ruff check src tests scripts
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Type checking
+  # ---------------------------------------------------------------------------
+  type-check:
+    name: Type Check (mypy)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run mypy
+        run: uv run mypy src
+
+  # ---------------------------------------------------------------------------
+  # Job 3: Tests
+  # ---------------------------------------------------------------------------
+  test:
+    name: Tests
+    runs-on: ubuntu-latest
+    needs: [lint]  # don't waste CI minutes if lint fails
+
+    env:
+      # Use defaults — no real cloud services in CI for Phase 1
+      APP_ENV: development
+      LOG_LEVEL: WARNING
+      DATABASE_URL: postgresql+asyncpg://user:password@localhost:5432/arxiv_rag
+      REDIS_URL: redis://localhost:6379
+      OPENSEARCH_HOST: localhost
+      OPENSEARCH_PORT: 9200
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v3
+        with:
+          version: ${{ env.UV_VERSION }}
+
+      - name: Set up Python
+        run: uv python install ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: uv sync --extra dev
+
+      - name: Run unit tests
+        run: uv run pytest -m unit --tb=short -q
+
+      - name: Run integration tests (no external services)
+        run: uv run pytest -m integration --tb=short -q
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: htmlcov/
+          retention-days: 7
