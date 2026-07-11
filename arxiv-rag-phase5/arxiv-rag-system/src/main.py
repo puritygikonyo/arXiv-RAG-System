@@ -117,4 +117,3 @@ app.include_router(search_router, prefix="/api/v1")
 @app.get("/", include_in_schema=False)
 async def root() -> dict[str, str]:
     return {"message": "arXiv RAG System — visit /docs for API documentation"}
-

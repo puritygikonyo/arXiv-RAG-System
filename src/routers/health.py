@@ -7,7 +7,12 @@ This is the first endpoint you build at any company.
 It's what your load balancer, Kubernetes readiness probe,
 and on-call engineers hit first when something breaks.
 """
-
+from src.config import get_settings
+from src.logger import get_logger
+# (no new top-level import needed — ping_database is imported inline above
+#  to avoid a circular import between database.py and health.py at module
+#  load time, since database.py doesn't depend on health.py, but keeping
+#  the import local is the safer pattern)
 import time
 from typing import Any
 
@@ -23,7 +28,7 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 
-# ── Response schemas ──────────────────────────────────────────────────────────
+# ── Response schemas ──────────────────────────────────────────────────────
 
 class ServiceStatus(BaseModel):
     status: str          # "ok" | "degraded" | "unreachable"
@@ -43,14 +48,17 @@ class HealthResponse(BaseModel):
 _start_time = time.monotonic()
 
 
-# ── Health check helpers ──────────────────────────────────────────────────────
+# ── Health check helpers ──────────────────────────────────────────────────
 
 async def check_opensearch() -> ServiceStatus:
     """Ping OpenSearch cluster health endpoint."""
     url = f"{settings.opensearch_url}/_cluster/health"
     start = time.monotonic()
     try:
-        async with httpx.AsyncClient(timeout=3.0) as client:
+        async with httpx.AsyncClient(
+            timeout=10.0,
+            auth=(settings.opensearch_user, settings.opensearch_password),
+        ) as client:
             resp = await client.get(url)
         latency = (time.monotonic() - start) * 1000
         if resp.status_code == 200:
@@ -63,26 +71,35 @@ async def check_opensearch() -> ServiceStatus:
         return ServiceStatus(
             status="degraded",
             latency_ms=round(latency, 2),
-            detail=f"HTTP {resp.status_code}",
+            detail=f"HTTP {resp.status_code}: {resp.text[:200]}",
         )
     except Exception as e:
-        return ServiceStatus(status="unreachable", detail=str(e))
+        # Surface the exception type even when str(e) is empty —
+        # some httpx/httpcore connection errors stringify to "" on Windows.
+        detail = f"{type(e).__name__}: {e}" if str(e) else type(e).__name__
+        logger.warning("opensearch_health_check_failed", error=detail)
+        return ServiceStatus(status="unreachable", detail=detail)
 
 
 async def check_database() -> ServiceStatus:
-    """
-    Check PostgreSQL connectivity.
-    Phase 3 will replace this stub with a real DB ping.
-    """
-    # Stub — will be replaced in Phase 3 when we add SQLAlchemy
+    """Check PostgreSQL connectivity via a real SELECT 1 ping."""
     if settings.database_url.startswith("postgresql+asyncpg://user:password"):
         return ServiceStatus(
             status="not_configured",
             detail="Set DATABASE_URL in .env (Phase 3)",
         )
-    return ServiceStatus(status="ok", detail="connection check pending Phase 3")
-
-
+ 
+    from src.database import ping_database
+ 
+    start = time.monotonic()
+    is_ok, detail = await ping_database()
+    latency = (time.monotonic() - start) * 1000
+ 
+    return ServiceStatus(
+        status="ok" if is_ok else "unreachable",
+        latency_ms=round(latency, 2),
+        detail=detail,
+    )
 async def check_redis() -> ServiceStatus:
     """
     Check Redis connectivity.
@@ -96,7 +113,7 @@ async def check_redis() -> ServiceStatus:
     return ServiceStatus(status="ok", detail="connection check pending Phase 8")
 
 
-# ── Health endpoint ───────────────────────────────────────────────────────────
+# ── Health endpoint ────────────────────────────────────────────────────────
 
 @router.get(
     "/health",
