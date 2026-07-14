@@ -17,6 +17,7 @@ from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+
 class Settings(BaseSettings):
     """
     Application settings loaded from environment variables.
@@ -88,8 +89,8 @@ class Settings(BaseSettings):
     chunk_overlap: int = 50
 
     # ── Phase 7: LLM ─────────────────────────────────────────────────────────
-    groq_api_key: str = ""
-    llm_model: str = "llama3-70b-8192"
+    groq_api_key: str = Field(default="", env="GROQ_API_KEY")
+    groq_model: str = Field(default="llama-3.3-70b-versatile", env="GROQ_MODEL")
     llm_temperature: float = 0.1
     llm_max_tokens: int = 2048
     llm_streaming: bool = True
@@ -133,6 +134,8 @@ class Settings(BaseSettings):
         scheme = "https" if self.opensearch_use_ssl else "http"
         return f"{scheme}://{self.opensearch_host}:{self.opensearch_port}"
 
+from functools import lru_cache
+
 
 @lru_cache
 def get_settings() -> Settings:
@@ -143,3 +146,4 @@ def get_settings() -> Settings:
     In tests, call get_settings.cache_clear() to reset between tests.
     """
     return Settings()
+

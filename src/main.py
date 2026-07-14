@@ -72,12 +72,14 @@ app.add_middleware(
 from src.routers.health import router as health_router          # noqa: E402
 from src.routers.search import router as search_router          # noqa: E402
 from src.routers.hybrid_search import router as hybrid_router   # noqa: E402
+from src.routers.ask import router as ask_router                # noqa: E402
 
 app.include_router(health_router, prefix="/api/v1")
 app.include_router(search_router, prefix="/api/v1")
 app.include_router(hybrid_router, prefix="/api/v1")
+app.include_router(ask_router, prefix="/api/v1")
 
-# Phase 7 will add: from src.routers.ask import router as ask_router
+
 
 
 @app.get("/", include_in_schema=False)
