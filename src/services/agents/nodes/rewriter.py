@@ -14,10 +14,13 @@ import json
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
+from langfuse.decorators import observe, langfuse_context
 
 from src.config import get_settings
 from src.logger import get_logger
 from src.services.agents.state import AgentState
+from src.services.rate_limit import groq_semaphore
+
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -43,6 +46,7 @@ def _get_llm() -> ChatGroq:
     )
 
 
+@observe(name="rewriter_node")
 async def rewriter_node(state: AgentState) -> dict:
     """Rewrite state['search_query'] based on the failed retrieval attempt."""
     original_query = state["query"]
@@ -67,11 +71,12 @@ async def rewriter_node(state: AgentState) -> dict:
     ]
 
     try:
-        response = await llm.ainvoke(messages)
-        parsed = json.loads(response.content)
-        rewritten_query = str(parsed["rewritten_query"]).strip()
-        if not rewritten_query:
-            raise ValueError("empty rewritten_query")
+        async with groq_semaphore:
+            response = await llm.ainvoke(messages)
+            parsed = json.loads(response.content)
+            rewritten_query = str(parsed["rewritten_query"]).strip()
+            if not rewritten_query:
+                raise ValueError("empty rewritten_query")
     except (json.JSONDecodeError, KeyError, ValueError) as exc:
         # Fall back to the original question verbatim rather than blocking
         # the loop — worst case the retriever just retries the same search.
@@ -82,6 +87,10 @@ async def rewriter_node(state: AgentState) -> dict:
         "rewriter_complete",
         original_query=original_query[:100],
         rewritten_query=rewritten_query[:100],
+    )
+
+    langfuse_context.update_current_observation(
+        output={"rewritten_query": rewritten_query},
     )
 
     return {

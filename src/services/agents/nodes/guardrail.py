@@ -9,10 +9,13 @@ import json
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
+from langfuse.decorators import observe, langfuse_context
 
 from src.config import get_settings
 from src.logger import get_logger
 from src.services.agents.state import AgentState
+from src.services.rate_limit import groq_semaphore
+
 
 settings = get_settings()
 logger = get_logger(__name__)
@@ -46,10 +49,21 @@ def _get_llm() -> ChatGroq:
     )
 
 
+@observe(name="guardrail_node")
 async def guardrail_node(state: AgentState) -> dict:
     """Classify the query as on-topic or off-topic."""
     query = state["query"]
     llm = _get_llm()
+
+    # First node in the graph — name and tag the whole trace here so
+    # every downstream span (retriever, grader, etc.) is grouped under
+    # one identifiable trace in the Langfuse dashboard, instead of
+    # showing up as an unnamed run.
+    langfuse_context.update_current_trace(
+        name="agentic_rag_query",
+        input={"query": query},
+        tags=["arxiv-rag", "cache_miss"],
+    )
 
     messages = [
         SystemMessage(content=SYSTEM_PROMPT),
@@ -57,10 +71,11 @@ async def guardrail_node(state: AgentState) -> dict:
     ]
 
     try:
-        response = await llm.ainvoke(messages)
-        parsed = json.loads(response.content)
-        is_on_topic = bool(parsed.get("on_topic", True))
-        reason = str(parsed.get("reason", ""))
+        async with groq_semaphore:
+            response = await llm.ainvoke(messages)
+            parsed = json.loads(response.content)
+            is_on_topic = bool(parsed.get("on_topic", True))
+            reason = str(parsed.get("reason", ""))
     except (json.JSONDecodeError, KeyError, AttributeError) as exc:
         # Fail open: if the classifier call breaks, let the query through
         # rather than blocking a legitimate user. Log it so you notice.
@@ -69,6 +84,10 @@ async def guardrail_node(state: AgentState) -> dict:
         reason = "guardrail parse failure, defaulted to on-topic"
 
     logger.info("guardrail_result", query=query, on_topic=is_on_topic, reason=reason)
+
+    langfuse_context.update_current_observation(
+        output={"is_on_topic": is_on_topic, "reason": reason},
+    )
 
     return {
         "is_on_topic": is_on_topic,

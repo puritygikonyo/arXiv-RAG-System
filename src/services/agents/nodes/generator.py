@@ -12,10 +12,13 @@ node itself.
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
+from langfuse.decorators import observe, langfuse_context
 
 from src.config import get_settings
 from src.logger import get_logger
 from src.services.agents.state import AgentState, ChunkResult
+from src.services.rate_limit import groq_semaphore
+
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -56,6 +59,7 @@ def _build_context(chunks: list[ChunkResult]) -> str:
     return "\n\n---\n\n".join(blocks)
 
 
+@observe(name="generator_node")
 async def generator_node(state: AgentState) -> dict:
     """Generate the final answer from the graded, relevant chunks."""
     query = state["query"]   # the user's original question, not search_query
@@ -67,6 +71,12 @@ async def generator_node(state: AgentState) -> dict:
 
     if not relevant_chunks:
         logger.warning("generator_no_relevant_chunks", query=query[:100])
+        langfuse_context.update_current_observation(
+            output={"status": "no_relevant_docs"},
+        )
+        langfuse_context.update_current_trace(
+            output={"status": "no_relevant_docs"},
+        )
         return {
             "answer": (
                 "I couldn't find enough relevant material in the paper "
@@ -85,21 +95,31 @@ async def generator_node(state: AgentState) -> dict:
             content=f"Question: {query}\n\nChunks:\n\n{_build_context(relevant_chunks)}"
         ),
     ]
+    async with groq_semaphore:
+        response = await llm.ainvoke(messages)
+        answer = response.content
 
-    response = await llm.ainvoke(messages)
-    answer = response.content
+        citations = sorted({c["paper_id"] for c in relevant_chunks})
 
-    citations = sorted({c["paper_id"] for c in relevant_chunks})
+        logger.info(
+            "generator_complete",
+            query=query[:100],
+            chunks_used=len(relevant_chunks),
+            citation_count=len(citations),
+        )
 
-    logger.info(
-        "generator_complete",
-        query=query[:100],
-        chunks_used=len(relevant_chunks),
-        citation_count=len(citations),
-    )
+        langfuse_context.update_current_observation(
+            output={"answer": answer, "citations": citations},
+        )
+        # Also set the trace-level output — this is what shows up as the
+        # "final result" when you look at the trace list in Langfuse,
+        # rather than having to drill into the generator span every time.
+        langfuse_context.update_current_trace(
+            output={"answer": answer, "citations": citations},
+        )
 
-    return {
-        "answer": answer,
-        "citations": citations,
-        "status": "answered",
-    }
+        return {
+            "answer": answer,
+            "citations": citations,
+            "status": "answered",
+        }

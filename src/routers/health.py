@@ -112,7 +112,6 @@ async def check_redis() -> ServiceStatus:
         )
     return ServiceStatus(status="ok", detail="connection check pending Phase 8")
 
-
 # ── Health endpoint ────────────────────────────────────────────────────────
 
 @router.get(

@@ -89,8 +89,9 @@ class Settings(BaseSettings):
     chunk_overlap: int = 50
 
     # ── Phase 7: LLM ─────────────────────────────────────────────────────────
-    groq_api_key: str = Field(default="", env="GROQ_API_KEY")
-    groq_model: str = Field(default="llama-3.3-70b-versatile", env="GROQ_MODEL")
+    groq_api_key: str = Field(default="")
+    groq_model: str = Field(default="llama-3.3-70b-versatile")
+
     llm_temperature: float = 0.1
     llm_max_tokens: int = 2048
     llm_streaming: bool = True
@@ -98,9 +99,14 @@ class Settings(BaseSettings):
     agent_relevance_threshold: float = 0.7
 
     # ── Phase 8: Redis Cache ──────────────────────────────────────────────────
-    redis_url: str = "redis://localhost:6379"
-    cache_ttl_seconds: int = 3600
-    cache_similarity_threshold: float = 0.92
+   # ── Phase 8: Redis Cache (Upstash REST API) ────────────────────────────────
+    upstash_redis_rest_url: str = ""
+    upstash_redis_rest_token: str = ""
+    cache_ttl_seconds: int = 60 * 60 * 24 * 7  # 7 days
+    cache_similarity_threshold: float = 0.80
+
+    # admin api key
+    admin_api_key: str = ""
 
     # ── Phase 8: Langfuse Monitoring ──────────────────────────────────────────
     langfuse_public_key: str = ""
@@ -113,7 +119,9 @@ class Settings(BaseSettings):
 
     @field_validator("telegram_allowed_chat_ids", mode="before")
     @classmethod
-    def parse_chat_ids(cls, v: str | list[int]) -> list[int]:
+    def parse_chat_ids(cls, v: str | list[int] | int) -> list[int]:
+        if isinstance(v, int):
+            return [v]
         if isinstance(v, str):
             if not v.strip():
                 return []

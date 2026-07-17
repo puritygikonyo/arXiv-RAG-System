@@ -8,11 +8,15 @@ blocking the event loop while other requests are being served.
 
 import asyncio
 
+from langfuse.decorators import observe, langfuse_context
+
 from src.config import get_settings
 from src.logger import get_logger
 from src.services.agents.state import AgentState, ChunkResult
 from src.services.embeddings.jina import embed_query
 from src.services.search.hybrid import search_chunks_by_vector
+from src.services.rate_limit import jina_semaphore
+
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -21,6 +25,7 @@ settings = get_settings()
 TOP_K = 5
 
 
+@observe(name="retriever_node")
 async def retriever_node(state: AgentState) -> dict:
     """Embed the current search query and fetch the most relevant chunks."""
     query = state["search_query"]
@@ -28,9 +33,14 @@ async def retriever_node(state: AgentState) -> dict:
 
     # ── Step 1: embed the query ──────────────────────────────────────────
     try:
-        query_vector = await asyncio.to_thread(embed_query, query)
+        async with jina_semaphore:
+            query_vector = await asyncio.to_thread(embed_query, query)
     except Exception as exc:
         logger.error("retriever_embed_failed", error=str(exc), query=query)
+        langfuse_context.update_current_observation(
+            output={"error": "embed_failed", "chunks_found": 0},
+            level="ERROR",
+        )
         return {
             "chunks": [],
             "retrieval_attempts": attempt + 1,
@@ -46,6 +56,10 @@ async def retriever_node(state: AgentState) -> dict:
         )
     except Exception as exc:
         logger.error("retriever_search_failed", error=str(exc), query=query)
+        langfuse_context.update_current_observation(
+            output={"error": "search_failed", "chunks_found": 0},
+            level="ERROR",
+        )
         return {
             "chunks": [],
             "retrieval_attempts": attempt + 1,
@@ -73,6 +87,14 @@ async def retriever_node(state: AgentState) -> dict:
         query=query[:100],
         attempt=attempt,
         chunks_found=len(chunks),
+    )
+
+    langfuse_context.update_current_observation(
+        output={
+            "chunks_found": len(chunks),
+            "attempt": attempt,
+            "top_scores": [round(c["score"], 3) for c in chunks[:3]],
+        },
     )
 
     return {

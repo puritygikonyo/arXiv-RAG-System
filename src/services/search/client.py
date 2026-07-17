@@ -16,6 +16,15 @@ HOW IT WORKS:
 WHY A MODULE-LEVEL VARIABLE?
   FastAPI doesn't have built-in dependency injection for non-HTTP things
   like DB clients. A module-level singleton is the clean, standard pattern.
+
+CONNECTION POOL SIZE (Phase 8 fix):
+  Load testing under 10 concurrent users surfaced "Connection pool is
+  full, discarding connection: localhost. Connection pool size: 1" —
+  the underlying urllib3 HTTP connection pool was capped at 1, meaning
+  only one OpenSearch request could be in flight across the entire app
+  at once. Every concurrent request beyond that had to wait for the
+  single connection to free up, or the pool discarded and recreated
+  connections repeatedly. pool_maxsize explicitly raises this cap.
 """
 
 from opensearchpy import OpenSearch
@@ -72,6 +81,7 @@ async def init_opensearch() -> None:
         timeout=30,
         max_retries=3,
         retry_on_timeout=True,
+        pool_maxsize=25,  # was implicitly 1 — raised to support concurrent requests
     )
 
     # Verify the connection works

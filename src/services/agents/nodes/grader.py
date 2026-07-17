@@ -9,10 +9,13 @@ import json
 
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_groq import ChatGroq
+from langfuse.decorators import observe, langfuse_context
 
 from src.config import get_settings
 from src.logger import get_logger
 from src.services.agents.state import AgentState, ChunkResult
+from src.services.rate_limit import groq_semaphore
+
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -53,6 +56,7 @@ def _build_user_message(query: str, chunks: list[ChunkResult]) -> str:
     return "\n".join(lines)
 
 
+@observe(name="grader_node")
 async def grader_node(state: AgentState) -> dict:
     """Score each chunk in state['chunks'] for relevance to the query."""
     query = state["query"]
@@ -60,6 +64,9 @@ async def grader_node(state: AgentState) -> dict:
 
     if not chunks:
         logger.info("grader_no_chunks", query=query)
+        langfuse_context.update_current_observation(
+            output={"graded_chunks": 0, "avg_relevance": 0.0},
+        )
         return {"graded_chunks": [], "avg_relevance": 0.0}
 
     llm = _get_llm()
@@ -69,9 +76,10 @@ async def grader_node(state: AgentState) -> dict:
     ]
 
     try:
-        response = await llm.ainvoke(messages)
-        scores = json.loads(response.content)
-        score_by_id = {s["chunk_id"]: float(s["relevance"]) for s in scores}
+        async with groq_semaphore:
+            response = await llm.ainvoke(messages)
+            scores = json.loads(response.content)
+            score_by_id = {s["chunk_id"]: float(s["relevance"]) for s in scores}
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
         # Fail safe here means the OPPOSITE of the guardrail: if grading
         # breaks, treat everything as low relevance (0.3) rather than
@@ -91,6 +99,20 @@ async def grader_node(state: AgentState) -> dict:
         query=query[:100],
         chunk_count=len(graded_chunks),
         avg_relevance=round(avg_relevance, 3),
+    )
+
+    langfuse_context.update_current_observation(
+        output={
+            "chunk_count": len(graded_chunks),
+            "avg_relevance": round(avg_relevance, 3),
+        },
+    )
+    # Numeric score attached to this observation — this is what makes
+    # avg_relevance filterable/sortable in the Langfuse dashboard as a
+    # first-class metric, rather than something buried in output JSON.
+    langfuse_context.score_current_observation(
+        name="avg_relevance",
+        value=avg_relevance,
     )
 
     return {

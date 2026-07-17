@@ -1,6 +1,5 @@
 """
 arXiv RAG System — FastAPI application entry point.
-Phase 6 update: adds hybrid search router and chunks index initialisation.
 """
 
 from collections.abc import AsyncGenerator
@@ -14,6 +13,7 @@ from slowapi.util import get_remote_address
 
 from src.config import get_settings
 from src.logger import get_logger, setup_logging
+from src.routers import health, search, hybrid_search, ask, admin
 
 setup_logging()
 logger = get_logger(__name__)
@@ -26,11 +26,17 @@ limiter = Limiter(key_func=get_remote_address)
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("application_starting", env=settings.app_env, version="0.1.0")
 
-    # Phase 5: OpenSearch
+    from langfuse.decorators import langfuse_context
+
+    langfuse_context.configure(
+        public_key=settings.langfuse_public_key,
+        secret_key=settings.langfuse_secret_key,
+        host=settings.langfuse_host,
+    )
+
     from src.services.search.client import close_opensearch, init_opensearch
     await init_opensearch()
 
-    # Phase 6: ensure chunks index exists
     from src.services.embeddings.vector_indexer import ensure_chunks_index_exists
     ensure_chunks_index_exists()
 
@@ -41,6 +47,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     yield
 
     logger.info("application_shutting_down")
+    from src.services.monitoring.langfuse_client import flush_langfuse
+    flush_langfuse()
     await close_opensearch()
     logger.info("application_shutdown")
 
@@ -69,19 +77,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-from src.routers.health import router as health_router          # noqa: E402
-from src.routers.search import router as search_router          # noqa: E402
-from src.routers.hybrid_search import router as hybrid_router   # noqa: E402
-from src.routers.ask import router as ask_router                # noqa: E402
-
-app.include_router(health_router, prefix="/api/v1")
-app.include_router(search_router, prefix="/api/v1")
-app.include_router(hybrid_router, prefix="/api/v1")
-app.include_router(ask_router, prefix="/api/v1")
-
-
+app.include_router(health.router, prefix="/api/v1")
+app.include_router(search.router, prefix="/api/v1")
+app.include_router(hybrid_search.router, prefix="/api/v1")
+app.include_router(ask.router, prefix="/api/v1")
+app.include_router(admin.router)  # admin.py already sets prefix="/api/v1/admin" internally — don't double it
 
 
 @app.get("/", include_in_schema=False)
 async def root() -> dict[str, str]:
     return {"message": "arXiv RAG System — visit /docs for API documentation"}
+
+

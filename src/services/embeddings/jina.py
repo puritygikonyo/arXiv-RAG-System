@@ -30,6 +30,16 @@ RETRY LOGIC:
     Try 3: wait 2 seconds
     Try 4: wait 4 seconds
   This handles temporary network blips without crashing.
+
+CONNECTION REUSE (Phase 8 addition):
+  Every function here used to call the top-level httpx.post() convenience
+  function, which opens a brand new TCP connection and does a fresh TLS
+  handshake on EVERY call, then tears it down. That handshake overhead
+  (often several hundred ms, sometimes more depending on network path)
+  was being paid repeatedly even when calling the same host back-to-back.
+  A single module-level httpx.Client with keep-alive fixes this: the
+  underlying connection is reused across calls, so only the first call
+  in a while pays full handshake cost.
 """
 
 import httpx
@@ -46,6 +56,25 @@ JINA_API_URL = "https://api.jina.ai/v1/embeddings"
 
 # Maximum texts per API call (Jina's limit is 2048, we use 50 to be safe)
 BATCH_SIZE = 50
+
+# ── Persistent HTTP client ──────────────────────────────────────────────
+# Module-level singleton, built once, reused for every call in this
+# process. Keep-alive means the TCP connection + TLS session to
+# api.jina.ai survives between requests instead of being torn down and
+# rebuilt each time. httpx.Client is thread-safe, which matters here
+# since these functions are called via asyncio.to_thread from async code.
+_http_client: httpx.Client | None = None
+
+
+def _get_http_client() -> httpx.Client:
+    global _http_client
+    if _http_client is None:
+        _http_client = httpx.Client(
+            timeout=60.0,
+            limits=httpx.Limits(max_keepalive_connections=5, max_connections=10),
+        )
+        logger.info("jina_http_client_initialized")
+    return _http_client
 
 
 @retry(
@@ -85,7 +114,8 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
 
     logger.info("embedding_texts", count=len(texts), model=settings.jina_embedding_model)
 
-    response = httpx.post(
+    client = _get_http_client()
+    response = client.post(
         JINA_API_URL,
         headers={
             "Authorization": f"Bearer {settings.jina_api_key}",
@@ -101,7 +131,6 @@ def embed_texts(texts: list[str]) -> list[list[float]]:
             "task": "retrieval.passage",
             "dimensions": settings.jina_embedding_dimensions,
         },
-        timeout=60.0,  # Jina can be slow for large batches
     )
 
     response.raise_for_status()
@@ -140,7 +169,8 @@ def embed_query(query: str) -> list[float]:
 
     logger.debug("embedding_query", query=query[:100])
 
-    response = httpx.post(
+    client = _get_http_client()
+    response = client.post(
         JINA_API_URL,
         headers={
             "Authorization": f"Bearer {settings.jina_api_key}",
@@ -152,7 +182,6 @@ def embed_query(query: str) -> list[float]:
             "task": "retrieval.query",   # ← different task type for queries
             "dimensions": settings.jina_embedding_dimensions,
         },
-        timeout=30.0,
     )
 
     response.raise_for_status()
@@ -160,6 +189,55 @@ def embed_query(query: str) -> list[float]:
 
     vector = data["data"][0]["embedding"]
     logger.debug("query_embedding_complete", dimensions=len(vector))
+
+    return vector
+
+
+def embed_for_similarity(text: str) -> list[float]:
+    """
+    Generate an embedding optimised for comparing two pieces of text
+    against each other (semantic textual similarity / symmetric matching)
+    — NOT for query-vs-document retrieval.
+
+    Uses Jina's "text-matching" task adapter. This is distinct from
+    embed_query's "retrieval.query" adapter: retrieval.query is trained
+    for asymmetric query→passage matching (a short query finding a long
+    relevant document), while text-matching is trained so that two
+    semantically equivalent pieces of text land close together in vector
+    space regardless of length or phrasing — exactly what the semantic
+    cache needs when comparing a new question to a previously cached one.
+
+    Args:
+        text: the text to embed (e.g. a user query, for cache comparison)
+
+    Returns:
+        single embedding vector (list of 1024 floats)
+    """
+    if not settings.jina_api_key:
+        raise ValueError("JINA_API_KEY not set in .env")
+
+    logger.debug("embedding_for_similarity", text=text[:100])
+
+    client = _get_http_client()
+    response = client.post(
+        JINA_API_URL,
+        headers={
+            "Authorization": f"Bearer {settings.jina_api_key}",
+            "Content-Type": "application/json",
+        },
+        json={
+            "model": settings.jina_embedding_model,
+            "input": [text],
+            "task": "text-matching",   # ← symmetric similarity, not retrieval
+            "dimensions": settings.jina_embedding_dimensions,
+        },
+    )
+
+    response.raise_for_status()
+    data = response.json()
+
+    vector = data["data"][0]["embedding"]
+    logger.debug("similarity_embedding_complete", dimensions=len(vector))
 
     return vector
 
