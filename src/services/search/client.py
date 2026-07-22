@@ -86,14 +86,14 @@ async def init_opensearch() -> None:
         }],
         http_auth=(settings.opensearch_user, settings.opensearch_password),
         use_ssl=settings.opensearch_use_ssl,
-        verify_certs=settings.opensearch_use_ssl,   # see TLS note above
+        verify_certs=settings.opensearch_use_ssl,
+        ca_certs="src/certs/aiven-ca.pem",   # <-- add this
         ssl_show_warn=settings.opensearch_use_ssl,
         timeout=30,
         max_retries=3,
         retry_on_timeout=True,
-        pool_maxsize=25,  # was implicitly 1 — raised to support concurrent requests
+        pool_maxsize=25,
     )
-
     # Verify the connection works
     try:
         health = _client.cluster.health()

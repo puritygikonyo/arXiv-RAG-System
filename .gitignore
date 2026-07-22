@@ -6,8 +6,9 @@
 .env
 .env.local
 .env.*.local
-*.pem
+*private*.pem
 *.key
+!src/certs/aiven-ca.pem
 
 # ── Python ────────────────────────────────────────────────────────────────────
 __pycache__/
@@ -81,7 +82,7 @@ Thumbs.db
 
 # ── Data & Models (too large for git) ────────────────────────────────────────
 data/
-models/
+/models/
 *.bin
 *.safetensors
 

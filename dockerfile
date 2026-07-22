@@ -20,9 +20,11 @@ RUN uv sync --all-extras --no-dev
 COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
+COPY src/certs/ ./src/certs/
 
 EXPOSE 8000
 
 # Render assigns PORT dynamically at runtime — shell form so ${PORT}
 # actually expands, unlike exec form which passes it literally
-CMD uv run uvicorn src.main:app --host 0.0.0.0 --port "${PORT:-8000}"
+CMD uv run uvicorn src.main:app --host 0.0.0.0 --port "${PORT:-8000}" 
+
