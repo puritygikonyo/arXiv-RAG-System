@@ -88,4 +88,3 @@ app.include_router(admin.router)  # admin.py already sets prefix="/api/v1/admin"
 async def root() -> dict[str, str]:
     return {"message": "arXiv RAG System — visit /docs for API documentation"}
 
-

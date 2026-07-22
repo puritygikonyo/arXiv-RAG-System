@@ -35,7 +35,8 @@ dependencies = [
     "langchain-openai>=0.2.0",
     # --- Phase 8: Caching & Monitoring ---
     "redis>=5.0.0",
-    "langfuse>=2.60.0,<3.0.0",
+    "langfuse>=2.0.0,<3.0.0",
+    "locust>=2.31.0",
     # --- Phase 9: Telegram Bot ---
     "python-telegram-bot>=21.0.0",
     # --- Shared utilities ---
@@ -46,8 +47,7 @@ dependencies = [
     "rich>=13.8.0",
     "gradio>=6.19.0",
     "upstash-redis>=1.7.0",
-    "redis>=5.0.0",
-    "locust>=2.45.0",
+    "redis>=5.0.0"
 ]
 
 [project.optional-dependencies]

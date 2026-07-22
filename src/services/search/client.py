@@ -25,6 +25,16 @@ CONNECTION POOL SIZE (Phase 8 fix):
   at once. Every concurrent request beyond that had to wait for the
   single connection to free up, or the pool discarded and recreated
   connections repeatedly. pool_maxsize explicitly raises this cap.
+
+TLS CERT VERIFICATION (Phase 10 fix):
+  verify_certs was previously hardcoded to False with a "local dev
+  only — enable in production" comment that nobody had come back to
+  yet. Now that we're pointing this at a real hosted cluster (Bonsai)
+  over HTTPS with a real certificate, it's tied to opensearch_use_ssl
+  instead: local dev (plain http, no SSL) doesn't need cert
+  verification since there's no cert to verify, but any SSL connection
+  gets real verification rather than blindly trusting whatever's on
+  the other end of the connection.
 """
 
 from opensearchpy import OpenSearch
@@ -76,8 +86,8 @@ async def init_opensearch() -> None:
         }],
         http_auth=(settings.opensearch_user, settings.opensearch_password),
         use_ssl=settings.opensearch_use_ssl,
-        verify_certs=False,         # local dev only — enable in production
-        ssl_show_warn=False,
+        verify_certs=settings.opensearch_use_ssl,   # see TLS note above
+        ssl_show_warn=settings.opensearch_use_ssl,
         timeout=30,
         max_retries=3,
         retry_on_timeout=True,
