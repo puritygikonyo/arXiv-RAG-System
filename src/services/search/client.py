@@ -87,7 +87,6 @@ async def init_opensearch() -> None:
         http_auth=(settings.opensearch_user, settings.opensearch_password),
         use_ssl=settings.opensearch_use_ssl,
         verify_certs=settings.opensearch_use_ssl,
-        ca_certs="src/certs/aiven-ca.pem",   # <-- add this
         ssl_show_warn=settings.opensearch_use_ssl,
         timeout=30,
         max_retries=3,
