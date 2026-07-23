@@ -154,4 +154,7 @@ demo = gr.ChatInterface(
 
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860, auth=auth_fn)
+    # Render assigns PORT dynamically — fall back to 7860 for local dev,
+    # same pattern used for the FastAPI service's Dockerfile.
+    port = int(os.environ.get("PORT", 7860))
+    demo.launch(server_name="0.0.0.0", server_port=port, auth=auth_fn)
