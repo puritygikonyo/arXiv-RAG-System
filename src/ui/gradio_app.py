@@ -1,32 +1,43 @@
 """
-Gradio chat UI for the Phase 7 agentic RAG system.
+Gradio chat UI for the agentic RAG system — invite-only access.
 
-Runs as its own process, separate from the FastAPI backend, and talks to
-POST /api/v1/ask over plain HTTP -- exactly like the curl test did. This
-mirrors how you'd deploy it for real in Phase 10 (Gradio on Hugging Face
-Spaces, calling a separately hosted API), so nothing needs to change later.
+Runs as its own process, talks to POST /api/v1/ask over plain HTTP.
 
-Run (with the FastAPI server already running on localhost:8000):
+ACCESS CONTROL:
+  Gradio's built-in auth expects (username, password). We repurpose this:
+  username can be anything (their name, for your own reference in logs),
+  password is their invite token (generated via generate_invite.py).
+  auth_fn() checks the token against the `invites` table in Postgres —
+  revoked or unknown tokens are rejected.
+
+Run locally (with the FastAPI server already running):
     uv run python src/ui/gradio_app.py
-
 Then open http://localhost:7860
+
+For deployment, set GRADIO_API_URL to your deployed Render API's /api/v1/ask
+endpoint instead of relying on the localhost default.
 """
 
 import json
+import os
+from datetime import UTC, datetime
 
 import gradio as gr
 import httpx
+from sqlalchemy import select
 
 from src.config import get_settings
+from src.database import AsyncSessionLocal
+from src.models import Invite
 
 settings = get_settings()
 
-# api_host is "0.0.0.0" (a bind address, not a reachable address) --
-# use localhost to actually connect to it from this separate process.
 _host = "localhost" if settings.api_host == "0.0.0.0" else settings.api_host
-API_URL = f"http://{_host}:{settings.api_port}/api/v1/ask"
+DEFAULT_API_URL = f"http://{_host}:{settings.api_port}/api/v1/ask"
+# Override with the deployed Render URL when running this UI as its own
+# service, e.g. GRADIO_API_URL=https://arxiv-rag-system-xxxx.onrender.com/api/v1/ask
+API_URL = os.environ.get("GRADIO_API_URL", DEFAULT_API_URL)
 
-# friendly labels shown while the graph is working, before the final answer
 NODE_LABELS = {
     "guardrail": "Checking if this is answerable from the paper database...",
     "retriever": "Searching papers...",
@@ -38,7 +49,6 @@ NODE_LABELS = {
 
 
 def _format_progress(events: list[dict]) -> str:
-    """Render the running list of progress events as a small status trail."""
     lines = []
     for e in events:
         label = NODE_LABELS.get(e["node"], e["node"])
@@ -48,13 +58,42 @@ def _format_progress(events: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
+async def _check_invite(password: str) -> bool:
+    """
+    Look up the submitted password as an invite token. Valid + not revoked
+    => allow in, and stamp first_used_at / last_used_at for visibility
+    into who's actually using their invite.
+    """
+    async with AsyncSessionLocal() as session:
+        invite = await session.scalar(select(Invite).where(Invite.token == password))
+        if invite is None or invite.revoked:
+            return False
+
+        now = datetime.now(UTC)
+        if invite.first_used_at is None:
+            invite.first_used_at = now
+        invite.last_used_at = now
+        await session.commit()
+        return True
+
+
+async def auth_fn(username: str, password: str) -> bool:
+    """
+    Gradio supports async auth callables directly — no need to wrap with
+    asyncio.run, which can conflict with Gradio's own running event loop
+    and silently fail (caught as a generic exception, misread as "wrong
+    password" when it's actually a Python-level event loop conflict).
+    """
+    try:
+        return await _check_invite(password)
+    except Exception as e:
+        # Log this instead of silently swallowing it — a DB hiccup during
+        # login should be visible, not indistinguishable from a wrong token.
+        print(f"[auth_fn] Error checking invite: {e}")
+        return False
+
+
 def ask_agent(message: str, history: list[dict]):
-    """
-    Generator function for gr.ChatInterface (type='messages').
-    Each yield REPLACES the bot's message so far -- Gradio's streaming
-    convention -- so we show a running progress trail, then swap it for
-    the final answer once the generator node completes.
-    """
     events: list[dict] = []
 
     try:
@@ -88,12 +127,12 @@ def ask_agent(message: str, history: list[dict]):
                     yield answer
                     return
 
-                yield _format_progress(events)   # still in progress
+                yield _format_progress(events)
 
     except httpx.ConnectError:
         yield (
-            "Can't reach the API server. Make sure it's running:\n\n"
-            "`uv run uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload`"
+            "Can't reach the API server. Make sure it's running, or check "
+            "GRADIO_API_URL is pointed at the right place."
         )
     except httpx.TimeoutException:
         yield "The request timed out. Try again or check the server logs."
@@ -115,4 +154,4 @@ demo = gr.ChatInterface(
 
 
 if __name__ == "__main__":
-    demo.launch(server_name="0.0.0.0", server_port=7860)
+    demo.launch(server_name="0.0.0.0", server_port=7860, auth=auth_fn)

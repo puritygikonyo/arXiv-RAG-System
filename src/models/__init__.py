@@ -6,6 +6,8 @@ Paper  — one row per arXiv paper. Source of truth for metadata and
 Chunk  — one row per text chunk of a paper. Holds the chunk text itself;
          the actual embedding vector lives in OpenSearch (opensearch_doc_id
          links the two together).
+QueryLog — one row per /api/v1/ask request. Powers the metrics endpoint.
+Invite — invite-only access control for the web UI (and later, Telegram).
 """
 
 import enum
@@ -29,8 +31,6 @@ class IngestionStatus(str, enum.Enum):
 class Paper(Base):
     __tablename__ = "papers"
 
-    # arXiv's own ID as primary key (e.g. "2301.12345") — natural key,
-    # avoids needing a separate surrogate key + unique constraint.
     arxiv_id: Mapped[str] = mapped_column(String(32), primary_key=True)
 
     title: Mapped[str] = mapped_column(Text, nullable=False)
@@ -76,8 +76,6 @@ class Chunk(Base):
     content: Mapped[str] = mapped_column(Text, nullable=False)
     token_count: Mapped[int] = mapped_column(Integer, nullable=False)
 
-    # Links to the corresponding document in OpenSearch once indexed.
-    # Null until the Phase 5/6 pipeline embeds + indexes this chunk.
     opensearch_doc_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
@@ -88,14 +86,12 @@ class Chunk(Base):
 
     def __repr__(self) -> str:
         return f"<Chunk paper={self.paper_id!r} index={self.chunk_index}>"
-    
+
+
 class QueryLog(Base):
     """
-    One row per /api/v1/ask request. Powers the Phase 8 metrics endpoint
-    (cache hit rate, avg latency, top queries) — data Langfuse's own
-    dashboard doesn't aggregate natively. Deliberately minimal: this is
-    a lightweight analytics log, not a replacement for Langfuse's
-    detailed per-node tracing.
+    One row per /api/v1/ask request. Powers the metrics endpoint
+    (cache hit rate, avg latency, top queries).
     """
     __tablename__ = "query_logs"
 
@@ -105,9 +101,44 @@ class QueryLog(Base):
     latency_ms: Mapped[int] = mapped_column(Integer, nullable=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False)  # answered | off_topic | no_relevant_docs | error
 
+    # Which invite token made this request — nullable so existing rows
+    # from before this feature existed still work. Enables per-user usage
+    # tracking and quota enforcement.
+    invite_token: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now(), nullable=False, index=True
     )
 
     def __repr__(self) -> str:
         return f"<QueryLog id={self.id} cache_hit={self.cache_hit} latency_ms={self.latency_ms}>"
+
+
+class Invite(Base):
+    """
+    Invite-only access control for the Gradio web UI (and later, Telegram).
+
+    Each row is one shareable invite link/token. The person visiting enters
+    the token as their password on Gradio's login screen. Revoking access
+    for one person just means flipping `revoked` to True — doesn't affect
+    anyone else's token.
+
+    `daily_question_limit` enables basic per-invite usage control (the
+    "control token usage" requirement) without needing a full auth system.
+    """
+    __tablename__ = "invites"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    label: Mapped[str] = mapped_column(String(255), nullable=False)  # e.g. "Lincoln High - Ms. Chen"
+    revoked: Mapped[bool] = mapped_column(default=False, nullable=False)
+    daily_question_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now(), nullable=False
+    )
+    first_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+    def __repr__(self) -> str:
+        return f"<Invite label={self.label!r} revoked={self.revoked}>"
