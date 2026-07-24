@@ -19,15 +19,20 @@ logger = get_logger(__name__)
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
 
+def _verify_admin_key(x_admin_key: str) -> None:
+    """Shared check — same admin key protects every /admin endpoint."""
+    settings = get_settings()
+    if x_admin_key != settings.admin_api_key:
+        raise HTTPException(status_code=401, detail="Invalid admin key")
+
+
 @router.post("/cache/invalidate")
 async def invalidate_semantic_cache(x_admin_key: str = Header(...)) -> dict:
     """
     Wipe the semantic cache. Called by the Airflow ingestion DAG after
     new papers are indexed, or manually during development.
     """
-    settings = get_settings()
-    if x_admin_key != settings.admin_api_key:
-        raise HTTPException(status_code=401, detail="Invalid admin key")
+    _verify_admin_key(x_admin_key)
 
     cleared = await invalidate_cache()
     logger.info("admin_cache_invalidate_triggered", cleared_count=cleared)
@@ -35,14 +40,21 @@ async def invalidate_semantic_cache(x_admin_key: str = Header(...)) -> dict:
 
 
 @router.get("/metrics")
-async def get_metrics(db: AsyncSession = Depends(get_db)) -> dict:
+async def get_metrics(
+    x_admin_key: str = Header(...), db: AsyncSession = Depends(get_db)
+) -> dict:
     """
     Aggregate stats over query_logs: cache hit rate, avg latency by
     cache hit/miss, and the 10 most frequent queries. This is the data
     Langfuse's own dashboard doesn't aggregate natively — for per-node
     performance and individual request traces, use the Langfuse
     dashboard directly instead.
+
+    Now requires the same admin key as cache/invalidate — this exposes
+    query content and volume, which shouldn't be publicly viewable.
     """
+    _verify_admin_key(x_admin_key)
+
     total = await db.scalar(select(func.count(QueryLog.id)))
     if not total:
         return {
