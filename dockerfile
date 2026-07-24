@@ -20,6 +20,8 @@ RUN uv sync --all-extras --no-dev
 COPY src/ ./src/
 COPY alembic/ ./alembic/
 COPY alembic.ini ./
+COPY run_telegram_bot.py ./
+
 
 EXPOSE 8000
 
