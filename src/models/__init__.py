@@ -132,6 +132,9 @@ class Invite(Base):
     username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     label: Mapped[str] = mapped_column(String(255), nullable=False)  # e.g. "Lincoln High - Ms. Chen"
+    telegram_chat_id: Mapped[int | None] = mapped_column(
+        Integer, unique=True, nullable=True, index=True
+    )
     revoked: Mapped[bool] = mapped_column(default=False, nullable=False)
     daily_question_limit: Mapped[int | None] = mapped_column(Integer, nullable=True)
 
