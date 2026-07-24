@@ -129,6 +129,7 @@ class Invite(Base):
     __tablename__ = "invites"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    username: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     token: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
     label: Mapped[str] = mapped_column(String(255), nullable=False)  # e.g. "Lincoln High - Ms. Chen"
     revoked: Mapped[bool] = mapped_column(default=False, nullable=False)

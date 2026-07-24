@@ -18,6 +18,7 @@ For deployment, set GRADIO_API_URL to your deployed Render API's /api/v1/ask
 endpoint instead of relying on the localhost default.
 """
 
+import asyncio
 import json
 import os
 from datetime import UTC, datetime
@@ -58,15 +59,15 @@ def _format_progress(events: list[dict]) -> str:
     return "\n\n".join(lines)
 
 
-async def _check_invite(password: str) -> bool:
+async def _check_invite(username: str, password: str) -> bool:
     """
-    Look up the submitted password as an invite token. Valid + not revoked
-    => allow in, and stamp first_used_at / last_used_at for visibility
-    into who's actually using their invite.
+    Look up the invite by username, then verify the submitted password
+    matches that invite's token. Both must be correct — a right-looking
+    username with a wrong password still fails.
     """
     async with AsyncSessionLocal() as session:
-        invite = await session.scalar(select(Invite).where(Invite.token == password))
-        if invite is None or invite.revoked:
+        invite = await session.scalar(select(Invite).where(Invite.username == username))
+        if invite is None or invite.revoked or invite.token != password:
             return False
 
         now = datetime.now(UTC)
@@ -85,7 +86,7 @@ async def auth_fn(username: str, password: str) -> bool:
     password" when it's actually a Python-level event loop conflict).
     """
     try:
-        return await _check_invite(password)
+        return await _check_invite(username, password)
     except Exception as e:
         # Log this instead of silently swallowing it — a DB hiccup during
         # login should be visible, not indistinguishable from a wrong token.
@@ -93,12 +94,27 @@ async def auth_fn(username: str, password: str) -> bool:
         return False
 
 
-def ask_agent(message: str, history: list[dict]):
+async def _get_token_for_username(username: str) -> str | None:
+    async with AsyncSessionLocal() as session:
+        invite = await session.scalar(select(Invite).where(Invite.username == username))
+        return invite.token if invite else None
+
+
+def ask_agent(message: str, history: list[dict], request: gr.Request):
     events: list[dict] = []
+
+    # Gradio exposes the logged-in username via request.username after
+    # auth succeeds — look up their token so /ask can enforce limits and
+    # attribute usage to them.
+    username = request.username
+    invite_token = asyncio.run(_get_token_for_username(username)) if username else None
 
     try:
         with httpx.stream(
-            "POST", API_URL, json={"question": message}, timeout=90.0
+            "POST",
+            API_URL,
+            json={"question": message, "invite_token": invite_token},
+            timeout=90.0,
         ) as response:
             for line in response.iter_lines():
                 if not line or not line.startswith("data: "):
@@ -112,6 +128,10 @@ def ask_agent(message: str, history: list[dict]):
 
                 if node == "error":
                     yield f"Something went wrong: {payload.get('detail', 'unknown error')}"
+                    return
+
+                if node == "blocked":
+                    yield payload.get("reason", "Access denied.")
                     return
 
                 events.append(payload)

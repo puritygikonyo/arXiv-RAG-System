@@ -14,7 +14,13 @@ generation entirely) and logs a lightweight manual Langfuse trace tagged
 nodes ran. On a miss, runs the full graph as before (tagged "cache_miss"
 inside guardrail_node) and stores the result afterward.
 
+Invite enforcement (added alongside the Gradio web UI): every request
+carries an invite_token. Before the cache check or any graph work runs,
+we verify the token is valid, not revoked, and under its daily limit —
+a blocked/exhausted user costs nothing, not even a cache lookup.
+
 Event shapes (one JSON object per SSE `data:` line):
+    {"node": "blocked",    "reason": "..."}
     {"node": "cache",      "cache_hit": true, "similarity": 0.94}
     {"node": "guardrail",  "is_on_topic": true}
     {"node": "retriever",  "chunks_found": 3, "attempt": 1}
@@ -45,6 +51,7 @@ from src.models import QueryLog
 from src.schemas.ask import AskRequest
 from src.services.agents.workflow import agent_graph
 from src.services.cache.semantic_cache import get_cached_answer, set_cached_answer
+from src.services.invite_check import check_invite_allowed
 from src.services.monitoring.langfuse_client import get_langfuse_client
 
 router = APIRouter(tags=["ask"])
@@ -56,7 +63,13 @@ def _sse(payload: dict) -> str:
     return f"data: {json.dumps(payload)}\n\n"
 
 
-async def _log_query(query: str, cache_hit: bool, latency_ms: int, status: str) -> None:
+async def _log_query(
+    query: str,
+    cache_hit: bool,
+    latency_ms: int,
+    status: str,
+    invite_token: str | None = None,
+) -> None:
     """
     Write one row to query_logs. Uses its own short-lived session rather
     than FastAPI's Depends(get_db) — this function runs inside a
@@ -74,6 +87,7 @@ async def _log_query(query: str, cache_hit: bool, latency_ms: int, status: str) 
                 cache_hit=cache_hit,
                 latency_ms=latency_ms,
                 status=status,
+                invite_token=invite_token,
             ))
             await session.commit()
     except Exception as exc:
@@ -98,8 +112,18 @@ def _log_cache_hit_trace(question: str, answer: str, citations: list[str]) -> No
         logger.warning("cache_hit_trace_failed", error=str(exc))
 
 
-async def _stream_agent(question: str) -> AsyncGenerator[str, None]:
+async def _stream_agent(
+    question: str, invite_token: str | None
+) -> AsyncGenerator[str, None]:
     request_start = time.monotonic()
+
+    # ── Step 0: invite enforcement — before anything else runs ──────────
+    allowed, reason = await check_invite_allowed(invite_token)
+    if not allowed:
+        logger.info("ask_blocked", reason=reason, invite_token=invite_token)
+        yield _sse({"node": "blocked", "reason": reason})
+        yield _sse({"node": "done"})
+        return
 
     # ── Step 1: check the semantic cache before running anything ────────
     cached = await get_cached_answer(question)
@@ -120,7 +144,10 @@ async def _stream_agent(question: str) -> AsyncGenerator[str, None]:
         })
 
         latency_ms = int((time.monotonic() - request_start) * 1000)
-        await _log_query(question, cache_hit=True, latency_ms=latency_ms, status="answered")
+        await _log_query(
+            question, cache_hit=True, latency_ms=latency_ms,
+            status="answered", invite_token=invite_token,
+        )
 
         yield _sse({"node": "done"})
         return
@@ -163,7 +190,10 @@ async def _stream_agent(question: str) -> AsyncGenerator[str, None]:
             await set_cached_answer(question, final_answer, final_citations)
 
         latency_ms = int((time.monotonic() - request_start) * 1000)
-        await _log_query(question, cache_hit=False, latency_ms=latency_ms, status=final_status)
+        await _log_query(
+            question, cache_hit=False, latency_ms=latency_ms,
+            status=final_status, invite_token=invite_token,
+        )
 
         yield _sse({"node": "done"})
 
@@ -171,7 +201,10 @@ async def _stream_agent(question: str) -> AsyncGenerator[str, None]:
         logger.error("ask_stream_failed", error=str(exc), question=question[:100])
 
         latency_ms = int((time.monotonic() - request_start) * 1000)
-        await _log_query(question, cache_hit=False, latency_ms=latency_ms, status="error")
+        await _log_query(
+            question, cache_hit=False, latency_ms=latency_ms,
+            status="error", invite_token=invite_token,
+        )
 
         yield _sse({"node": "error", "detail": str(exc)})
 
@@ -190,7 +223,7 @@ async def ask(request: AskRequest) -> StreamingResponse:
     logger.info("ask_request", question=request.question[:100])
 
     return StreamingResponse(
-        _stream_agent(request.question),
+        _stream_agent(request.question, request.invite_token),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
