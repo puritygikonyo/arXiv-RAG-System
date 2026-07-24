@@ -5,4 +5,3 @@ __pycache__/
 .env
 tests/
 locustfile.py
-run_telegram_bot.py
