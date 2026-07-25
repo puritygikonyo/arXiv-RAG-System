@@ -59,7 +59,7 @@ class Settings(BaseSettings):
 
     # ── Phase 4: arXiv Pipeline ───────────────────────────────────────────────
     arxiv_api_base_url: str = "https://export.arxiv.org/api/query"
-    arxiv_categories: list[str] = ["cs.AI", "cs.LG", "cs.CL", "cs.IR"]
+    arxiv_categories: list[str] = ["eess.SY"]
     arxiv_max_results_per_run: int = 100
 
     @field_validator("arxiv_categories", mode="before")

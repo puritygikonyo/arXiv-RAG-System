@@ -273,4 +273,4 @@ async def run_ingestion() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(run_ingestion())
+    asyncio.run(run_ingestion())  
