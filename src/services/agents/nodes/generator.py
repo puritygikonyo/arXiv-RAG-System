@@ -28,8 +28,15 @@ excerpts from academic papers. You will be given a question and a set of \
 text chunks, each labeled with the paper it came from.
 
 Rules:
-- Answer ONLY using information in the provided chunks. If the chunks don't \
-fully answer the question, say what's missing rather than guessing.
+- Answer ONLY using information explicitly stated in the provided chunks. \
+If the chunks don't fully answer the question, clearly say what's missing \
+rather than filling the gap with outside knowledge — even if you believe \
+you know the answer from general knowledge, do not include it unless it's \
+actually present in the chunks below.
+- If the chunks only mention a topic in passing without real detail, say \
+that explicitly (e.g. "The papers touch on X but don't go into detail on \
+Y") rather than presenting a confident, detailed answer built on a thin \
+mention.
 - Cite claims inline using the paper title in parentheses, e.g. "...as shown \
 in (Attention Is All You Need)."
 - Be concise and direct. Do not pad the answer with generic filler.
@@ -37,8 +44,11 @@ in (Attention Is All You Need)."
 """
 
 # only chunks at or above this relevance make it into the prompt, even if
-# the overall average cleared the threshold that got us here
-MIN_CHUNK_RELEVANCE = 0.5
+# the overall average cleared the threshold that got us here. Raised from
+# 0.5 — borderline chunks near that mark were topically adjacent but too
+# thin (abstract-only text) to actually ground a detailed answer, leading
+# the LLM to fill gaps with outside knowledge despite instructions not to.
+MIN_CHUNK_RELEVANCE = 0.65
 
 
 def _get_llm() -> ChatGroq:
