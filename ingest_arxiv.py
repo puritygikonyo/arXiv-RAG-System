@@ -216,7 +216,7 @@ async def run_ingestion() -> None:
     # INDEX_BATCH_LIMIT caps how many pending papers this run processes —
     # useful for a fast test run against a large backlog. Set to None to
     # process everything pending in one run.
-    INDEX_BATCH_LIMIT = 250
+    INDEX_BATCH_LIMIT = 500
 
     async with AsyncSessionLocal() as session:
         query = select(Paper).where(Paper.ingestion_status != IngestionStatus.indexed)
