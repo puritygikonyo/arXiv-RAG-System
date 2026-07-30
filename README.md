@@ -3,9 +3,21 @@
 **Production-grade Agentic RAG for academic paper research.**
 Built with FastAPI · OpenSearch · LangGraph · Groq · Deployed on Hugging Face Spaces.
 
+The **academic paper research assistant** automatically fetches academic papers, understands their content, answers the research questions using advanced RAG techniques.
+
+The project is to keep the cost as $0 as possible.
+
+Ask a research question in plain English, get an answer grounded in real arXIv papers - with sources cited, not hallucinated. 
+
+**Live demo · GIF/video walkthrough (links will be added once ready)**
 ---
 
 ## What This Is
+
+This is an agentic RAG(Retrieval-Augmented Generation) system: instead of just searching for documents and stuffing them into a prompt, it makes real decisions along the way.i.e checking whether a question is even answerable from the paper database, judging whether what is found is actually good enough, and automatically rewriting its own search and trying again if not. 
+\\
+\\
+
 
 An end-to-end Retrieval-Augmented Generation (RAG) system that:
 - **Ingests** arXiv papers automatically via Airflow DAGs
@@ -14,8 +26,29 @@ An end-to-end Retrieval-Augmented Generation (RAG) system that:
 - **Serves** multiple users via FastAPI REST API, Gradio UI, and Telegram bot
 
 Built as a learning project following production engineering practices — the way it's done at FAANG companies.
-
 ---
+
+## Why this isn't "just a chatbot"
+Most RAG demos follow one fixed path: retrieve ----> generate. This ssystem can loop and autocorrect:
+
+
+Question → Is this answerable from our papers?  → No → polite rejection
+                    │ Yes
+                    ▼
+              Search papers  ──────────┐
+                    │                  │
+                    ▼                  │
+          Grade result quality         │
+                    │                  │
+        Good enough?  ── No ──> Rewrite the search query
+                    │ Yes              │  (up to 3 attempts)
+                    ▼                  │
+             Write final answer <──────┘
+             (with citations)
+
+
+
+This is implemented as a LangGraph state machine: guardrail -> retriever -> grader -> rewriter -> generator, with a bounded retry loop so it never spins forever, and a graceful fallback (best-effort answer) if it hits the retry limit without a perfect match.
 
 ## Architecture
 
@@ -44,7 +77,7 @@ Data Pipeline → Astronomer Astro (Airflow)
 | LLM | Groq (Llama 3 70B) | Free tier |
 | Cache | Upstash Redis | Free tier |
 | Monitoring | Langfuse Cloud | Free tier |
-| Deployment | Hugging Face Spaces | Free |
+| Deployment | Render | Free |
 | CI/CD | GitHub Actions | Free |
 
 **Total cost: $0**
@@ -107,15 +140,15 @@ make test-cov      # tests + coverage report
 | Phase | Description | Status |
 |-------|-------------|--------|
 | 1 | Project scaffold & config | ✅ Complete |
-| 2 | FastAPI skeleton + health | 🔄 Next |
-| 3 | PostgreSQL models + Neon | ⏳ Planned |
-| 4 | arXiv data pipeline (Airflow) | ⏳ Planned |
-| 5 | OpenSearch + BM25 search | ⏳ Planned |
-| 6 | Embeddings + hybrid search | ⏳ Planned |
-| 7 | LangGraph agentic RAG | ⏳ Planned |
-| 8 | Redis caching + Langfuse | ⏳ Planned |
-| 9 | Telegram bot | ⏳ Planned |
-| 10 | HuggingFace Spaces deploy | ⏳ Planned |
+| 2 | FastAPI skeleton + health | ✅ Complete |
+| 3 | PostgreSQL models + Neon | ✅ Complete |
+| 4 | arXiv data pipeline (Airflow) | ✅ Complete |
+| 5 | OpenSearch + BM25 search | ✅ Complete |
+| 6 | Embeddings + hybrid search | ✅ Complete |
+| 7 | LangGraph agentic RAG | ✅ Complete |
+| 8 | Redis caching + Langfuse | ✅ Complete |
+| 9 | Telegram bot | ✅ Complete |
+| 10 | HuggingFace Spaces deploy | ✅ Complete |
 
 ---
 
