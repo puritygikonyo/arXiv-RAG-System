@@ -174,14 +174,14 @@ Real user testing surfaced work that wasn't part of the original 10-phase plan b
 
 A few things that came up building and deploying this for real, worth naming because they're the parts that actually taught something:
 
-**Found and fixed a real connection-pool bug under load testing:** Locust load testing surfaced "Connection pool is full" errors under concurrent requests — the OpenSearch client's connection pool was implicitly capped at 1, serializing every request through a single connection. Fixed by explicitly raising pool_maxsize.
+- **Found and fixed a real connection-pool bug under load testing:** Locust load testing surfaced "Connection pool is full" errors under concurrent requests — the OpenSearch client's connection pool was implicitly capped at 1, serializing every request through a single connection. Fixed by explicitly raising pool_maxsize.
 
 
-**Rearchitected search infrastructure to fit free-tier constraints:** The original design (self-hosted OpenSearch bundled with the app) needed far more RAM than any free hosting tier provides. Migrated to a managed OpenSearch service, decoupling the search engine from the app's compute — the architecturally correct pattern anyway, not just a workaround.
+- **Rearchitected search infrastructure to fit free-tier constraints:** The original design (self-hosted OpenSearch bundled with the app) needed far more RAM than any free hosting tier provides. Migrated to a managed OpenSearch service, decoupling the search engine from the app's compute — the architecturally correct pattern anyway, not just a workaround.
 
-**Airflow built but consciously not deployed** — a real, working DAG exists and was tested, but shipping it would have meant running a scheduler continuously for infrequent ingestion. Recognizing "built and correct" doesn't automatically mean "should be deployed" was itself a deliberate engineering call, not an oversight.
+- **Airflow built but consciously not deployed** — a real, working DAG exists and was tested, but shipping it would have meant running a scheduler continuously for infrequent ingestion. Recognizing "built and correct" doesn't automatically mean "should be deployed" was itself a deliberate engineering call, not an oversight.
 
-**Chased down several silent .gitignore/.dockerignore bugs:** Broad exclusion patterns (models/, *.pem) written for one purpose (blocking ML weight files, private keys) ended up silently excluding legitimate application code and public certificates from deploys — a good reminder that "it works locally" and "it's actually in the deployed image" are different claims.
+- **Chased down several silent .gitignore/.dockerignore bugs:** Broad exclusion patterns (models/, *.pem) written for one purpose (blocking ML weight files, private keys) ended up silently excluding legitimate application code and public certificates from deploys — a good reminder that "it works locally" and "it's actually in the deployed image" are different claims.
 
 
 ---
@@ -285,24 +285,31 @@ uv run python run_telegram_bot.py    # in a third terminal, for the bot
 ```
 arxiv-rag-system/
 ├── src/
-│   ├── routers/         # ask, search, hybrid_search, admin, health
+│   ├── routers/          # ask, search, hybrid_search, admin, health
 │   ├── services/
-│   │   ├── agents/      # LangGraph nodes + workflow (guardrail, retriever, grader, rewriter, generator)
-│   │   ├── search/      # OpenSearch client, BM25, hybrid search
-│   │   ├── embeddings/  # chunking, Jina client, vector indexing
-│   │   ├── cache/       # semantic cache (Upstash)
-│   │   ├── telegram/    # bot handlers
-│   │   ├── invite_check.py  # shared access-control enforcement
-│   │   └── monitoring/  # Langfuse client
-│   ├── ui/              # Gradio web interface
-│   ├── models/          # SQLAlchemy models: Paper, Chunk, QueryLog, Invite
+│   │   ├── agents/       # LangGraph nodes + workflow
+│   │   ├── search/       # OpenSearch client, BM25, hybrid search
+│   │   ├── embeddings/   # chunking, Jina client, vector indexing
+│   │   ├── cache/        # semantic cache (Upstash)
+│   │   ├── telegram/     # bot handlers
+│   │   ├── monitoring/   # Langfuse client
+│   │   └── invite_check.py
+│   ├── ui/               # Gradio web interface
+│   ├── models/           # Paper, Chunk, QueryLog, Invite
 │   └── main.py
-├── alembic/versions/     # database migrations
-├── airflow/              # Airflow project (built, not deployed — see Phase 4)
-├── ingest_arxiv.py       # standalone ingestion script (actually used)
-├── generate_invite.py    # create access invites
-├── remove_category.py / clear_pending.py / check_*.py  # corpus admin scripts
-└── Dockerfile            # shared build for all 3 deployed services
+├── tests/
+│   ├── unit/
+│   └── integration/
+├── alembic/versions/      # database migrations
+├── airflow/               # Airflow project (built, not deployed)
+├── scripts/               # operational + admin tooling
+│   ├── ingest_arxiv.py
+│   ├── generate_invite.py
+│   ├── check_ingestion_status.py
+│   ├── remove_category.py
+│   └── clear_pending.py
+├── locustfile.py          # load testing
+└── Dockerfile             # shared build for all 3 deployed services
 ```
 
 ---
