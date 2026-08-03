@@ -272,11 +272,13 @@ make test-cov      # tests + coverage report
 
 
 ## Running locally
+```
 uv sync
 cp .env.example .env   # fill in your own keys
 uv run uvicorn src.main:app --reload
 uv run python src/ui/gradio_app.py   # in a second terminal, for the web UI
 uv run python run_telegram_bot.py    # in a third terminal, for the bot
+```
 ---
 
 
