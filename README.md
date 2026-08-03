@@ -12,25 +12,25 @@ Ask a research question in plain English, get an answer grounded in real arXIv p
 **Live demo · GIF/video walkthrough (links will be added once ready)**
 ---
 ## Table of Contents
-[What this is](#what-this-is)
-[Architecture](#architecture)
-[Build Phases](#build-phases)
-    Phase 1 — Project scaffold & config
-    Phase 2 — FastAPI skeleton + health
-    Phase 3 — PostgreSQL models + Neon
-    Phase 4 — arXiv data pipeline
-    Phase 5 — OpenSearch + BM25 search
-    Phase 6 — Embeddings + hybrid search
-    Phase 7 — LangGraph agentic RAG
-    Phase 8 — Redis caching + Langfuse
-    Phase 9 — Telegram bot
-    Phase 10 — Deployment
-[Post-launch hardening](#post-lauch-hardening)
-Real engineering challenges(#real-engineering-challenges)
-Tech stack(#tech-stack)
-Project structure(#project-structure)
-Running locally(#running-locally)
-Roadmap(#roadmap)
+- [What this is](#what-this-is)
+- [Architecture](#architecture)
+- [Build Phases](#build-phases)
+  - [Phase 1 — Project scaffold & config](#phase-1--project-scaffold--config)
+  - [Phase 2 — FastAPI skeleton + health](#phase-2--fastapi-skeleton--health)
+  - [Phase 3 — PostgreSQL models + Neon](#phase-3--postgresql-models--neon)
+  - [Phase 4 — arXiv data pipeline](#phase-4--arxiv-data-pipeline)
+  - [Phase 5 — OpenSearch + BM25 search](#phase-5--opensearch--bm25-search)
+  - [Phase 6 — Embeddings + hybrid search](#phase-6--embeddings--hybrid-search)
+  - [Phase 7 — LangGraph agentic RAG](#phase-7--langgraph-agentic-rag)
+  - [Phase 8 — Redis caching + Langfuse](#phase-8--redis-caching--langfuse)
+  - [Phase 9 — Telegram bot](#phase-9--telegram-bot)
+  - [Phase 10 — Deployment](#phase-10--deployment)
+- [Post-launch hardening](#post-launch-hardening)
+- [Real engineering challenges](#real-engineering-challenges)
+- [Tech stack](#tech-stack)
+- [Project structure](#project-structure)
+- [Running locally](#running-locally)
+- [Roadmap](#roadmap)
 ---
 
 ## What This Is
