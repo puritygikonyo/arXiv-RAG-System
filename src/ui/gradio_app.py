@@ -18,7 +18,6 @@ For deployment, set GRADIO_API_URL to your deployed Render API's /api/v1/ask
 endpoint instead of relying on the localhost default.
 """
 
-import asyncio
 import json
 import os
 from datetime import UTC, datetime
@@ -100,54 +99,63 @@ async def _get_token_for_username(username: str) -> str | None:
         return invite.token if invite else None
 
 
-def ask_agent(message: str, history: list[dict], request: gr.Request):
+async def ask_agent(message: str, history: list[dict], request: gr.Request):
     events: list[dict] = []
 
     # Gradio exposes the logged-in username via request.username after
     # auth succeeds — look up their token so /ask can enforce limits and
     # attribute usage to them.
+    #
+    # Awaited directly (no asyncio.run) — same reasoning as auth_fn above:
+    # this function runs on Gradio's existing event loop (Gradio detects
+    # async generator functions and drives them with `async for`), so a
+    # fresh asyncio.run() call per request would spin up a brand-new event
+    # loop each time. The SQLAlchemy async engine's pooled connections stay
+    # bound to whichever loop first used them — a second call from a new
+    # loop breaks with "Future attached to a different loop" once the pool
+    # tries to reuse a connection created under the first, now-dead loop.
     username = request.username
-    invite_token = asyncio.run(_get_token_for_username(username)) if username else None
+    invite_token = await _get_token_for_username(username) if username else None
 
     try:
-        with httpx.stream(
-            "POST",
-            API_URL,
-            json={"question": message, "invite_token": invite_token},
-            timeout=90.0,
-        ) as response:
-            for line in response.iter_lines():
-                if not line or not line.startswith("data: "):
-                    continue
+        async with httpx.AsyncClient(timeout=90.0) as client:
+            async with client.stream(
+                "POST",
+                API_URL,
+                json={"question": message, "invite_token": invite_token},
+            ) as response:
+                async for line in response.aiter_lines():
+                    if not line or not line.startswith("data: "):
+                        continue
 
-                payload = json.loads(line[len("data: "):])
-                node = payload.get("node")
+                    payload = json.loads(line[len("data: "):])
+                    node = payload.get("node")
 
-                if node == "done":
-                    break
+                    if node == "done":
+                        break
 
-                if node == "error":
-                    yield f"Something went wrong: {payload.get('detail', 'unknown error')}"
-                    return
+                    if node == "error":
+                        yield f"Something went wrong: {payload.get('detail', 'unknown error')}"
+                        return
 
-                if node == "blocked":
-                    yield payload.get("reason", "Access denied.")
-                    return
+                    if node == "blocked":
+                        yield payload.get("reason", "Access denied.")
+                        return
 
-                events.append(payload)
+                    events.append(payload)
 
-                if node in ("generator", "reject"):
-                    answer = payload.get("answer", "")
-                    citations = payload.get("citations", [])
-                    if citations:
-                        links = ", ".join(
-                            f"[{c}](https://arxiv.org/abs/{c})" for c in citations
-                        )
-                        answer += f"\n\n**Sources:** {links}"
-                    yield answer
-                    return
+                    if node in ("generator", "reject"):
+                        answer = payload.get("answer", "")
+                        citations = payload.get("citations", [])
+                        if citations:
+                            links = ", ".join(
+                                f"[{c}](https://arxiv.org/abs/{c})" for c in citations
+                            )
+                            answer += f"\n\n**Sources:** {links}"
+                        yield answer
+                        return
 
-                yield _format_progress(events)
+                    yield _format_progress(events)
 
     except httpx.ConnectError:
         yield (
