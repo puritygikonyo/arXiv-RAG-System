@@ -72,7 +72,11 @@ This is implemented as a LangGraph state machine: guardrail -> retriever -> grad
 
 
 
-Four layers: an offline ingestion script pulls papers from arXiv and embeds them via Jina; Postgres (Neon) and OpenSearch (Aiven, managed) store metadata and power hybrid search; a FastAPI backend runs a LangGraph agentic loop with Groq as the LLM, Upstash for semantic caching, and Langfuse for tracing; and an invite-gated access layer serves the same backend to three clients — the raw API, a Gradio web UI, and a Telegram bot.
+Four layers: 
+- an offline ingestion script pulls papers from arXiv and embeds them via Jina;
+- Postgres (Neon) and OpenSearch (Aiven, managed) store metadata and power hybrid search;
+- a FastAPI backend runs a LangGraph agentic loop with Groq as the LLM, Upstash for semantic caching, and Langfuse for tracing;
+- an invite-gated access layer serves the same backend to three clients — the raw API, a Gradio web UI, and a Telegram bot.
 
 Version control and deployment triggers run through GitHub — Render's three services (API, Gradio, Telegram worker) each auto-deploy from the same repo on push, using one shared Dockerfile with different Start Commands per service.
 
