@@ -67,7 +67,7 @@ This is implemented as a LangGraph state machine: guardrail -> retriever -> grad
 
 ## Architecture
 
-![Agentic RAG System Architecture](C:\Users\gikon\Downloads\arxiv-rag-system\architecture.svg)
+![Agentic RAG System Architecture](https://github.com/puritygikonyo/arXiv-RAG-System/blob/main/architecture.svg))
 
 
 
