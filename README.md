@@ -67,7 +67,7 @@ This is implemented as a LangGraph state machine: guardrail -> retriever -> grad
 
 ## Architecture
 
-
+![Agentic RAG System Architecture](C:\Users\gikon\Downloads\arxiv-rag-system\architecture.svg)
 
 
 
@@ -307,11 +307,14 @@ arxiv-rag-system/
 ├── scripts/               # operational + admin tooling
 │   ├── ingest_arxiv.py
 │   ├── generate_invite.py
+│   ├── list_invites.py
 │   ├── check_ingestion_status.py
 │   ├── remove_category.py
 │   └── clear_pending.py
+├── run_telegram_bot.py    # entry point for the deployed Telegram worker
 ├── locustfile.py          # load testing
-└── Dockerfile             # shared build for all 3 deployed services
+└── Dockerfile              # shared build for all 3 deployed services
+
 ```
 
 ---
