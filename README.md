@@ -63,7 +63,7 @@ Question → Is this answerable from our papers?  → No → polite rejection
 ```
 
 
-This is implemented as a LangGraph state machine: guardrail -> retriever -> grader -> rewriter -> generator, with a bounded retry loop so it never spins forever, and a graceful fallback (best-effort answer) if it hits the retry limit without a perfect match.
+This is implemented as a LangGraph state machine: **guardrail -> retriever -> grader -> rewriter -> generator**, with a bounded retry loop so it never spins forever, and a graceful fallback (best-effort answer) if it hits the retry limit without a perfect match.
 
 ## Architecture
 
