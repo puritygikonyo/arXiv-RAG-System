@@ -8,7 +8,7 @@ The **academic paper research assistant** automatically fetches academic papers,
 The project is to keep the cost as $0 as possible.
 
 Ask a research question in plain English, get an answer grounded in real arXIv papers - with sources cited, not hallucinated. 
-
+![Agentic RAG System Architecture](https://github.com/puritygikonyo/arXiv-RAG-System/blob/main/Agentic%20RAG%20System%20final%20architecture%20image.png)
 **Live demo · GIF/video walkthrough (links will be added once ready)**
 ---
 ## Table of Contents
