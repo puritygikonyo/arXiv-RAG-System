@@ -11,10 +11,10 @@ Ask a research question in plain English, get an answer grounded in real arXIv p
 
 **Live demo · GIF/video walkthrough (links will be added once ready)**
 ---
-Table of Contents
-What this is
-Architecture
-Build Phases
+## Table of Contents
+[What this is](#what-this-is)
+[Architecture](#architecture)
+[Build Phases](#build-phases)
     Phase 1 — Project scaffold & config
     Phase 2 — FastAPI skeleton + health
     Phase 3 — PostgreSQL models + Neon
@@ -25,12 +25,12 @@ Build Phases
     Phase 8 — Redis caching + Langfuse
     Phase 9 — Telegram bot
     Phase 10 — Deployment
-Post-launch hardening
-Real engineering challenges
-Tech stack
-Project structure
-Running locally
-Roadmap
+[Post-launch hardening](#post-lauch-hardening)
+Real engineering challenges(#real-engineering-challenges)
+Tech stack(#tech-stack)
+Project structure(#project-structure)
+Running locally(#running-locally)
+Roadmap(#roadmap)
 ---
 
 ## What This Is
@@ -194,13 +194,16 @@ A few things that came up building and deploying this for real, worth naming bec
 | Agent orchestartion | LangGraph | Free |
 | Search | OpenSearch (Aiven, managed) — hybrid BM25 + k-NN vector search | Free
 | Database | Neon.tech (serverless Postgres) | Free |
-| Orchestration | Astronomer Astro (managed Airflow) | Free tier |
-| Embeddings | Jina AI | Free (1M tokens) |
+| Orchestration (built, not deployed) | Astronomer Astro (managed Airflow) | Free tier |
+| Embeddings | Jina AI (`jina-embeddings-v3`) | Free (1M tokens) |
 | LLM | Groq (Llama 3.3 70B) | Free tier |
 | Cache | Upstash Redis (semantic caching)| Free tier |
 | Observability & Monitoring | Langfuse Cloud | Free tier |
-| Deployment | Render | Free |
-| CI/CD | GitHub Actions | Free |
+| Web UI | Gradio | Free |
+| Bot Channel | Telegram( `python-telegram-bot`) | Free |
+| Deployment | Render(3 services from 1 Dockerfile) | Free |
+| CI/CD | GitHub (Render auto-deploys on push) | Free |
+| Migrations | Alembic | Free |
 
 **Total cost: $0**
 
@@ -209,9 +212,9 @@ A few things that came up building and deploying this for real, worth naming bec
 ## Quick Start
 
 ### Prerequisites
-- Python 3.12+
+- Python 3.14+
 - [uv](https://docs.astral.sh/uv/) package manager
-- Docker Desktop
+- Docker Desktop (optional — only needed if you want local OpenSearch instead of a remote Aiven instance)
 
 ### Setup
 
@@ -222,20 +225,31 @@ cd arxiv-rag-system
 
 # 2. Configure environment
 cp .env.example .env
-# Edit .env — most defaults work for local dev
+# Fill in your own OpenSearch (Aiven), Postgres (Neon), Jina, Groq,
+# Upstash, and Langfuse credentials
 
 # 3. Install dependencies
 make setup
 
-# 4. Start OpenSearch (only Docker service)
+# 4. (Optional) Start local OpenSearch instead of pointing at Aiven
 make start
 
-# 5. Verify everything
+# 5. Apply database migrations
+uv run alembic upgrade head
+
+# 6. Generate an invite token so you can actually log in later
+uv run python generate_invite.py demo "Local testing" --limit 20
+
+# 7. Verify everything
 make health
 
-# 6. Run the API
+# 8. Run the API
 make serve
 # Visit: http://localhost:8000/docs
+
+# 9. (Optional, separate terminals) Run the other clients
+uv run python src/ui/gradio_app.py    # web UI — http://localhost:7860
+uv run python run_telegram_bot.py     # Telegram bot
 ```
 
 ---
@@ -253,6 +267,7 @@ make check         # all of the above
 make test          # all tests
 make test-unit     # fast tests (no services needed)
 make test-cov      # tests + coverage report
+
 ```
 
 
