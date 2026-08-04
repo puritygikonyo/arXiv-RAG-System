@@ -9,7 +9,7 @@ The project is to keep the cost as $0 as possible.
 
 Ask a research question in plain English, get an answer grounded in real arXIv papers - with sources cited, not hallucinated. 
 ![Agentic RAG System Architecture](https://github.com/puritygikonyo/arXiv-RAG-System/blob/main/Agentic%20RAG%20System%20final%20architecture%20image.png)
-**![Live demo :]**(https://github.com/puritygikonyo/arXiv-RAG-System/blob/main/Agentic%20Research%20Assistant%20Demo.mp4) 
+**Live demo :** (C:\Users\gikon\Downloads\arxiv-rag-system\Agentic Research Assistant Demo.mp4)
 ---
 ## Table of Contents
 - [What this is](#what-this-is)
@@ -71,8 +71,6 @@ This is implemented as a LangGraph state machine: **guardrail -> retriever -> gr
 ![Agentic RAG System Architecture](https://github.com/puritygikonyo/arXiv-RAG-System/blob/main/architecture.svg))
 
 =======
-![Agentic RAG System Architecture](https://github.com/puritygikonyo/arXiv-RAG-System/blob/main/architecture.svg)
->>>>>>> c789b70 (adjusted the architecture image link)
 
 
 
