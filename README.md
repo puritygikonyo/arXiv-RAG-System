@@ -67,10 +67,7 @@ This is implemented as a LangGraph state machine: **guardrail -> retriever -> gr
 
 ## Architecture
 
-<<<<<<< HEAD
-![Agentic RAG System Architecture](https://github.com/puritygikonyo/arXiv-RAG-System/blob/main/architecture.svg))
-
-=======
+![Agentic RAG System Architecture](https://github.com/puritygikonyo/arXiv-RAG-System/blob/main/architecture.svg)
 
 
 
