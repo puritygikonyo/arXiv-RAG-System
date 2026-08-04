@@ -117,6 +117,20 @@ async def ask_agent(message: str, history: list[dict], request: gr.Request):
     username = request.username
     invite_token = await _get_token_for_username(username) if username else None
 
+    # NOTE: we deliberately never `return` from inside the `async with`
+    # blocks below. httpx's client.stream() is implemented as an
+    # @asynccontextmanager; returning from inside a nested async-generator
+    # based context manager, while this function is itself an async
+    # generator, can cause the context manager's own cleanup to raise a
+    # StopAsyncIteration internally. Because that happens inside this
+    # generator's frame, Python (PEP 479) converts it into
+    # "RuntimeError: async generator raised StopAsyncIteration" once
+    # Gradio calls anext() on us. Using `break` + a result variable, and
+    # yielding only after both `async with` blocks have exited cleanly,
+    # avoids that failure mode entirely.
+    final_answer: str | None = None
+    error_message: str | None = None
+
     try:
         async with httpx.AsyncClient(timeout=90.0) as client:
             async with client.stream(
@@ -135,12 +149,14 @@ async def ask_agent(message: str, history: list[dict], request: gr.Request):
                         break
 
                     if node == "error":
-                        yield f"Something went wrong: {payload.get('detail', 'unknown error')}"
-                        return
+                        error_message = (
+                            f"Something went wrong: {payload.get('detail', 'unknown error')}"
+                        )
+                        break
 
                     if node == "blocked":
-                        yield payload.get("reason", "Access denied.")
-                        return
+                        error_message = payload.get("reason", "Access denied.")
+                        break
 
                     events.append(payload)
 
@@ -152,18 +168,28 @@ async def ask_agent(message: str, history: list[dict], request: gr.Request):
                                 f"[{c}](https://arxiv.org/abs/{c})" for c in citations
                             )
                             answer += f"\n\n**Sources:** {links}"
-                        yield answer
-                        return
+                        final_answer = answer
+                        break
 
                     yield _format_progress(events)
 
     except httpx.ConnectError:
-        yield (
+        error_message = (
             "Can't reach the API server. Make sure it's running, or check "
             "GRADIO_API_URL is pointed at the right place."
         )
     except httpx.TimeoutException:
-        yield "The request timed out. Try again or check the server logs."
+        error_message = "The request timed out. Try again or check the server logs."
+
+    # Single, final yield point — guarantees ask_agent always produces at
+    # least one value, which is also what fixes Gradio's very first
+    # anext() call finding nothing to iterate.
+    if error_message is not None:
+        yield error_message
+    elif final_answer is not None:
+        yield final_answer
+    else:
+        yield "The agent didn't return a recognizable response. Try rephrasing your question."
 
 
 demo = gr.ChatInterface(
