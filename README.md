@@ -9,7 +9,7 @@ The project is to keep the cost as $0 as possible.
 
 Ask a research question in plain English, get an answer grounded in real arXIv papers - with sources cited, not hallucinated. 
 ![Agentic RAG System Architecture](https://github.com/puritygikonyo/arXiv-RAG-System/blob/main/Agentic%20RAG%20System%20final%20architecture%20image.png)
-**Live demo · GIF/video walkthrough (links will be added once ready)**
+**Live demo :** (C:\Users\gikon\Downloads\arxiv-rag-system\Agentic Research Assistant Demo.mp4)
 ---
 ## Table of Contents
 - [What this is](#what-this-is)
