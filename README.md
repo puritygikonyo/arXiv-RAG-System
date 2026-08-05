@@ -5,7 +5,7 @@ Built with FastAPI · OpenSearch · LangGraph · Groq · Deployed on Render.
 
 The **academic paper research assistant** automatically fetches academic papers, understands their content, answers the research questions using advanced RAG techniques.
 
-The project is to keep the cost as $0 as possible.
+The project keeps the cost as $0.
 
 Ask a research question in plain English, get an answer grounded in real arXIv papers - with sources cited, not hallucinated. 
 ![Agentic RAG System Architecture](https://github.com/puritygikonyo/arXiv-RAG-System/blob/main/Agentic%20RAG%20System%20final%20architecture%20image.png)
@@ -30,7 +30,6 @@ Ask a research question in plain English, get an answer grounded in real arXIv p
 - [Tech stack](#tech-stack)
 - [Project structure](#project-structure)
 - [Running locally](#running-locally)
-- [Roadmap](#roadmap)
 ---
 
 ## What This Is
@@ -158,7 +157,7 @@ The most involved phase, and the one with the most real debugging. Original plan
 The system now runs as **three separate Render services from one shared Dockerfile** (different Start Commands, all triggered by pushes to the same GitHub repo): the FastAPI API, a Gradio web UI, and a Telegram Background Worker.
 
 ---
-### Post-launch hardening (beyond Phase 10)
+## Post-launch hardening (beyond Phase 10)
 
 Real user testing surfaced work that wasn't part of the original 10-phase plan but was necessary before genuinely sharing the system:
 
