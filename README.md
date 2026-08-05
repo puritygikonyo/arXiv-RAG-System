@@ -24,7 +24,7 @@ Ask a research question in plain English, get an answer grounded in real arXIv p
   - [Phase 7 — LangGraph agentic RAG](#phase-7--langgraph-agentic-rag)
   - [Phase 8 — Redis caching + Langfuse](#phase-8--redis-caching--langfuse)
   - [Phase 9 — Telegram bot](#phase-9--telegram-bot)
-  - [Phase 10 — Deployment](#phase-10--deployment-(beyond-Phase-10))
+  - [Phase 10 — Deployment](#phase-10--deployment-(beyond-Phase-10)-)
 - [Post-launch hardening](#post-launch-hardening)
 - [Real engineering challenges](#Real-engineering-challenges-encountered-during-the-project)
 - [Tech stack](#tech-stack)
