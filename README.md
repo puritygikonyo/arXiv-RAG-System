@@ -15,7 +15,7 @@ Ask a research question in plain English, get an answer grounded in real arXIv p
 - [What this is](#what-this-is)
 - [Architecture](#architecture)
 - [Build Phases](#build-phases)
-  - [Phase 1 — Project scaffold & config](#Phase-1--Project-scaffold-&-config-(Project-Setup))
+  - [Phase 1 — Project scaffold & config](#Phase-1--Project-scaffold-&-config-(Project-Setup)-)
   - [Phase 2 — FastAPI skeleton + health](#phase-2--fastapi-skeleton--health)
   - [Phase 3 — PostgreSQL models + Neon](#phase-3--postgresql-models--neon)
   - [Phase 4 — arXiv data pipeline](#phase-4--arxiv-data-pipeline)
